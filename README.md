@@ -39,11 +39,18 @@ A modern implementation of the classic Space Invaders arcade game, built with Py
 
 ## 🎮 How to Play
 
+### Main Menu Controls
+- **Up/Down Arrows**: Navigate menu options
+- **Enter**: Select option
+- **ESC**: Quit game
+
+### In-Game Controls
 - **Left Arrow**: Move ship left
 - **Right Arrow**: Move ship right
 - **Space**: Shoot
 - **P**: Pause game
-- **ESC**: Quit (when in game over screen)
+- **M**: Return to main menu (when paused or at game over)
+- **ESC**: Quit game
 
 ## 💥 Power-Ups
 
