@@ -6,8 +6,6 @@
 
 A modern implementation of the classic Space Invaders arcade game, built with Python and Pygame. Defend Earth from waves of alien invaders in this action-packed shooter!
 
-![Game Screenshot](https://via.placeholder.com/800x400?text=Space+Invaders+Screenshot)
-
 ## ✨ Features
 
 - 🎮 Classic Space Invaders gameplay with modern enhancements
@@ -27,7 +25,7 @@ A modern implementation of the classic Space Invaders arcade game, built with Py
 1. Ensure you have Python 3.x installed on your system
 2. Clone this repository:
    ```
-   git clone https://github.com/AlejandroBalaguer/space-invaders.git
+   git clone https://github.com/AlejandroBalaguer/juego1.git
    cd space-invaders
    ```
 3. Install the required dependencies:
