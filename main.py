@@ -13,8 +13,8 @@ SCREEN_HEIGHT = 720
 PLAYER_SPEED = 8
 ENEMY_SPEED = 3
 BULLET_SPEED = 10
-ENEMY_BULLET_SPEED = 6
-ENEMY_SHOOT_CHANCE = 0.002  # 0.2% chance per frame
+ENEMY_BULLET_SPEED = 5
+ENEMY_SHOOT_CHANCE = 0.001  # 0.1% chance per frame
 ENEMY_ROWS = 5
 ENEMY_COLS = 10
 ENEMY_SPACING = 80
@@ -508,11 +508,19 @@ class EnemyGroup:
         self.last_move_time = pygame.time.get_ticks()
         self.speed = ENEMY_SPEED
 
+        # Calculate total width and height of enemy grid
+        total_width = ENEMY_COLS * ENEMY_SPACING
+        total_height = ENEMY_ROWS * ENEMY_SPACING
+
+        # Calculate starting positions to center the grid both horizontally and vertically
+        start_x = (SCREEN_WIDTH - total_width) // 2
+        start_y = (SCREEN_HEIGHT - total_height) // 3  # Position in the top third of the screen
+
         # Create grid of enemies
         for row in range(ENEMY_ROWS):
             for col in range(ENEMY_COLS):
-                x = 100 + col * ENEMY_SPACING
-                y = 50 + row * ENEMY_SPACING
+                x = start_x + col * ENEMY_SPACING
+                y = start_y + row * ENEMY_SPACING
                 self.enemies.append(Enemy(x, y, row))
 
     def draw(self):
@@ -591,12 +599,10 @@ class EnemyGroup:
 def check_collisions(player, enemy_group, enemies_killed=None):
     # Check player bullets hitting enemies
     for bullet in player.bullets[:]:
+        bullet_hit = False
         for enemy in enemy_group.enemies[:]:
             if (bullet[0] >= enemy.x and bullet[0] <= enemy.x + enemy.width and
                 bullet[1] >= enemy.y and bullet[1] <= enemy.y + enemy.height):
-                if bullet in player.bullets:
-                    player.bullets.remove(bullet)
-
                 # Create explosion effect
                 explosion_x = enemy.x + enemy.width // 2
                 explosion_y = enemy.y + enemy.height // 2
@@ -612,6 +618,7 @@ def check_collisions(player, enemy_group, enemies_killed=None):
                     power_up = PowerUp(explosion_x, explosion_y)
                     enemy_group.power_ups.append(power_up)
 
+                # Remove enemy and update score
                 enemy_group.enemies.remove(enemy)
                 player.score += 10
 
@@ -619,24 +626,50 @@ def check_collisions(player, enemy_group, enemies_killed=None):
                 if enemies_killed is not None:
                     enemies_killed[0] += 1
 
+                bullet_hit = True
                 break
+
+        # Remove bullet if it hit an enemy
+        if bullet_hit and bullet in player.bullets:
+            player.bullets.remove(bullet)
 
     # Check enemy bullets hitting player
     for bullet in enemy_group.bullets[:]:
         if (bullet[0] >= player.x and bullet[0] <= player.x + player.width and
             bullet[1] >= player.y and bullet[1] <= player.y + player.height):
-            enemy_group.bullets.remove(bullet)
+            # Remove the bullet
+            if bullet in enemy_group.bullets:
+                enemy_group.bullets.remove(bullet)
+
+            # Create impact effect at bullet position
+            explosion_x = bullet[0]
+            explosion_y = bullet[1]
 
             # If player has shield, don't lose a life
             if player.has_shield:
-                # Create a shield impact effect
-                explosion_x = bullet[0]
-                explosion_y = bullet[1]
+                # Create a shield impact effect (blue)
                 explosion_size = 10
                 explosion_lifetime = 10
                 enemy_group.explosions.append([explosion_x, explosion_y, explosion_size, explosion_lifetime])
+                # Play shield impact sound
+                shield_sound.play()
             else:
+                # Create a hit effect (red)
+                explosion_size = 15
+                explosion_lifetime = 15
+                enemy_group.explosions.append([explosion_x, explosion_y, explosion_size, explosion_lifetime])
+                # Reduce player lives
                 player.lives -= 1
+                # Play explosion sound
+                explosion_sound.play()
+
+                # Create a screen flash effect when player is hit
+                flash_surface = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+                flash_surface.fill(RED)
+                flash_surface.set_alpha(100)  # Semi-transparent
+                screen.blit(flash_surface, (0, 0))
+                pygame.display.flip()
+                pygame.time.delay(30)  # Brief flash
             break
 
     # Check player collecting power-ups
@@ -695,18 +728,41 @@ def draw_text(text, color, x, y):
     screen.blit(text_surface, (x, y))
 
 def game_over_screen(player):
-    screen.fill(BLACK)
-    draw_text("GAME OVER", RED, SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 - 50)
-    draw_text(f"Final Score: {player.score}", WHITE, SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2)
-    draw_text("Press SPACE to play again", WHITE, SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 50)
-    draw_text("Press M to return to main menu", WHITE, SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 100)
-    draw_text("Press ESC to quit", WHITE, SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 150)
-    pygame.display.flip()
+    # Create starfield background for game over screen
+    stars = [Star() for _ in range(150)]  # More stars for dramatic effect
+
+    # Create explosion particles at player position
+    explosion_particles = []
+    for _ in range(100):
+        angle = random.uniform(0, math.pi * 2)
+        speed = random.uniform(1, 5)
+        size = random.uniform(1, 4)
+        lifetime = random.randint(30, 90)
+        color = random.choice([RED, ORANGE, YELLOW, WHITE])
+        particle = {
+            'x': SCREEN_WIDTH // 2,
+            'y': SCREEN_HEIGHT - 100,
+            'dx': math.cos(angle) * speed,
+            'dy': math.sin(angle) * speed,
+            'size': size,
+            'lifetime': lifetime,
+            'color': color
+        }
+        explosion_particles.append(particle)
 
     waiting = True
     return_to_menu = False
+    start_time = pygame.time.get_ticks()
+
+    # For pulsating text effect
+    pulse_value = 0
+    pulse_direction = 1
 
     while waiting:
+        current_time = pygame.time.get_ticks()
+        elapsed_time = current_time - start_time
+
+        # Handle events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -720,7 +776,60 @@ def game_over_screen(player):
                 elif event.key == pygame.K_ESCAPE:
                     pygame.quit()
                     sys.exit()
-        clock.tick(30)
+
+        # Update pulsating effect
+        pulse_value += 0.05 * pulse_direction
+        if pulse_value >= 1.0:
+            pulse_direction = -1
+        elif pulse_value <= 0.0:
+            pulse_direction = 1
+
+        # Calculate pulsating size and color
+        pulse_size = int(50 + 10 * pulse_value)
+        pulse_color = (255, int(50 + 150 * pulse_value), int(50 * pulse_value))
+
+        # Draw background
+        screen.fill(BLACK)
+
+        # Update and draw stars with parallax effect
+        for star in stars:
+            star.update()
+            star.draw()
+
+        # Update and draw explosion particles
+        for particle in explosion_particles[:]:
+            particle['x'] += particle['dx']
+            particle['y'] += particle['dy']
+            particle['lifetime'] -= 1
+            particle['size'] -= 0.03
+
+            if particle['lifetime'] <= 0 or particle['size'] <= 0:
+                explosion_particles.remove(particle)
+            else:
+                pygame.draw.circle(screen, particle['color'], 
+                                  (int(particle['x']), int(particle['y'])), 
+                                  int(particle['size']))
+
+        # Draw game over text with pulsating effect
+        title_font = pygame.font.SysFont(None, pulse_size)
+        title_text = title_font.render("GAME OVER", True, pulse_color)
+        title_rect = title_text.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 70))
+        screen.blit(title_text, title_rect)
+
+        # Draw score with shadow effect
+        score_text = f"Final Score: {player.score}"
+        shadow_offset = 2
+        draw_text(score_text, BLACK, SCREEN_WIDTH // 2 - 100 + shadow_offset, SCREEN_HEIGHT // 2 + shadow_offset)
+        draw_text(score_text, WHITE, SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2)
+
+        # Draw instructions with highlight effect based on time
+        highlight_color = YELLOW if (elapsed_time // 500) % 2 == 0 else WHITE
+        draw_text("Press SPACE to play again", highlight_color, SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 50)
+        draw_text("Press M to return to main menu", WHITE, SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 100)
+        draw_text("Press ESC to quit", WHITE, SCREEN_WIDTH // 2 - 100, SCREEN_HEIGHT // 2 + 150)
+
+        pygame.display.flip()
+        clock.tick(60)  # Higher framerate for smoother animations
 
     return return_to_menu
 
@@ -982,7 +1091,7 @@ def pause_game():
     return return_to_menu
 
 def main():
-    global ENEMY_SHOOT_CHANCE
+    global ENEMY_SHOOT_CHANCE, ENEMY_ROWS, ENEMY_COLS
     # Try to load and play background music
     try:
         pygame.mixer.music.load("background_music.mp3")
@@ -1036,6 +1145,9 @@ def main():
                             return  # Exit if player quits from menu
                         # Initialize game again after returning from menu
                         player = Player()
+                        # Reset enemy grid to initial values
+                        ENEMY_ROWS = 5  # Reset to initial value
+                        ENEMY_COLS = 10  # Reset to initial value
                         enemy_group = EnemyGroup()
                         game_over = False
                         current_level = 1
@@ -1053,16 +1165,25 @@ def main():
                     return  # Exit if player quits from menu
                 # Initialize game again after returning from menu
                 player = Player()
+                # Reset enemy grid to initial values
+                ENEMY_ROWS = 5  # Reset to initial value
+                ENEMY_COLS = 10  # Reset to initial value
                 enemy_group = EnemyGroup()
                 game_over = False
                 current_level = 1
                 enemies_killed = 0
                 ENEMY_SHOOT_CHANCE = 0.002  # Reset difficulty
             else:
-                # Reset game and continue playing
+                # Reset game completely and continue playing from scratch
                 player = Player()
+                # Reset enemy grid to initial values
+                ENEMY_ROWS = 5  # Reset to initial value
+                ENEMY_COLS = 10  # Reset to initial value
                 enemy_group = EnemyGroup()
                 game_over = False
+                current_level = 1
+                enemies_killed = 0
+                ENEMY_SHOOT_CHANCE = 0.002  # Reset difficulty
 
             continue
 
@@ -1092,12 +1213,29 @@ def main():
         if enemies_killed >= enemies_to_next_level:
             current_level += 1
             enemies_killed = 0
+
+            # More balanced scaling formula for enemies needed to level up
+            # Uses square root function to make scaling more gradual at higher levels
+            enemies_to_next_level = int(15 + 10 * math.sqrt(current_level))
+
+            # Adjust ENEMY_ROWS and ENEMY_COLS based on level
+            # This will create more enemies as the level increases
+
+            # Increase rows and columns gradually with level, but cap at reasonable values
+            # to prevent the game from becoming too crowded or too difficult
+            ENEMY_ROWS = min(8, 3 + int(math.sqrt(current_level)))
+            ENEMY_COLS = min(12, 8 + int(math.sqrt(current_level)))
+
             # Create a new wave of enemies with increased difficulty
             enemy_group = EnemyGroup()
-            # Increase difficulty based on level
-            enemy_group.speed += 0.2 * current_level
-            # Increase enemy shoot chance with level (cap at a reasonable value)
-            ENEMY_SHOOT_CHANCE = min(0.01, 0.002 + 0.001 * current_level)
+
+            # More balanced speed scaling - logarithmic to prevent it from becoming too fast
+            # Base speed + logarithmic increase based on level
+            enemy_group.speed = ENEMY_SPEED + 0.5 * math.log(current_level + 1, 2)
+
+            # More balanced shoot chance scaling - logarithmic with a reasonable cap
+            # This makes early levels easier and prevents later levels from becoming impossible
+            ENEMY_SHOOT_CHANCE = min(0.004, 0.001 + 0.0003 * math.log(current_level + 1, 2))
             # Play level up sound
             levelup_sound.play()
 
@@ -1134,8 +1272,19 @@ def main():
         if len(enemy_group.enemies) == 0:
             # Create a new wave of enemies
             enemy_group = EnemyGroup()
-            # Increase difficulty
-            enemy_group.speed += 0.5
+            # Increase difficulty slightly (less than level progression)
+            # Use a small logarithmic increase to keep it balanced
+            enemy_group.speed += 0.1 * math.log(current_level + 1, 2)
+            # Slightly increase enemy shoot chance (but less than level progression)
+            # Use a small logarithmic increase to keep it balanced
+            ENEMY_SHOOT_CHANCE = min(0.004, ENEMY_SHOOT_CHANCE + 0.0001 * math.log(current_level + 1, 2))
+
+            # Display wave cleared message
+            screen.fill(BLACK)
+            draw_text("Wave Cleared!", YELLOW, SCREEN_WIDTH // 2 - 80, SCREEN_HEIGHT // 2)
+            draw_text("Get ready for the next wave!", WHITE, SCREEN_WIDTH // 2 - 150, SCREEN_HEIGHT // 2 + 50)
+            pygame.display.flip()
+            pygame.time.delay(1000)  # Pause for 1 second to show message
 
         # Draw everything
         screen.fill(BLACK)
