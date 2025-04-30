@@ -26,7 +26,7 @@ A modern implementation of the classic Space Invaders arcade game, built with Py
 2. Clone this repository:
    ```
    git clone https://github.com/AlejandroBalaguer/juego1.git
-   cd space-invaders
+   cd juego1
    ```
 3. Install the required dependencies:
    ```
